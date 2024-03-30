@@ -1,0 +1,10 @@
+PICO CONNECTIONS:
+
+https://circuitdigest.com/microcontroller-projects/control-a-servo-motor-with-raspberry-pi-pico-using-pwm-in-micropython
+
+SERVO MOTOR:
+https://how2electronics.com/using-rc522-rfid-reader-module-with-raspberry-pi-pico/
+
+DC motor:
+https://www.tomshardware.com/how-to/dc-motors-raspberry-pi-pico
+

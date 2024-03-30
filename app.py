@@ -650,13 +650,15 @@ def purchase():
                     # Update the available quantity in the product table
                     new_available_qty = available_qty - 1
                     curs.execute("UPDATE product SET available_qty = %s WHERE Rf_reader = %s", (new_available_qty, product_id))
-                    conns.commit()
-                    flash('Product purchased successfully!', 'success')
-                    print(f"user_rfid: {user_rfid}")
-                    print(f"product_price: {product_price}")
-                    print(f"new_balance: {new_balance}")
+                    # conns.commit()
+                    # flash('Product purchased successfully!', 'success')
+                    # print(f"user_rfid: {user_rfid}")
+                    # print(f"product_price: {product_price}")
+                    # print(f"new_balance: {new_balance}")
                     if request.headers['Content-Type'] == 'application/json':
                         return make_response(jsonify({"status": "purchased_success"}), 200)
+                    flash('Sucessfully purchased the product.')
+                    
                 else:
                     flash('Insufficient balance to purchase the product.', 'error')
                     return make_response(jsonify({"status": "Insufficient_balance"}), 200)
