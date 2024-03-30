@@ -1,5 +1,4 @@
 from flask import Flask, redirect, url_for, request,render_template,session, flash,jsonify, make_response
-
 import smtplib
 import sqlite3
 import binascii
