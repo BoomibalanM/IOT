@@ -658,6 +658,7 @@ def purchase():
                     if request.headers['Content-Type'] == 'application/json':
                         return make_response(jsonify({"status": "purchased_success"}), 200)
                     flash('Sucessfully purchased the product.')
+                    return redirect(url_for('add_cart'))
                     
                 else:
                     flash('Insufficient balance to purchase the product.', 'error')
