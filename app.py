@@ -22,6 +22,9 @@ USER ='dhanu'
 ACCOUNT ='FDNDCRV-CZ47175'
 DATABASE ='IOT'
 SCHEMA ='IOT'
+
+#To Activate venv use below code
+
 # IOT_env\Scripts\activate.bat
 
 conns = snowflake.connector.connect(
