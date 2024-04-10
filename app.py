@@ -12,6 +12,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import bcrypt
 from codecs import open
+
 app = Flask(__name__)
 
 app.config['SECRET_KEY'] = 'hinfo@123'
