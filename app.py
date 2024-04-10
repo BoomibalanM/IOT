@@ -1,4 +1,5 @@
 from flask import Flask, redirect, url_for, request,render_template,session, flash,jsonify, make_response
+
 import smtplib
 import sqlite3
 import binascii
@@ -12,6 +13,10 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import bcrypt
 from codecs import open
+import os
+import pyqrcode
+import json
+import requests
 
 app = Flask(__name__)
 
@@ -22,9 +27,6 @@ USER ='dhanu'
 ACCOUNT ='FDNDCRV-CZ47175'
 DATABASE ='IOT'
 SCHEMA ='IOT'
-
-#To Activate venv use below code
-
 # IOT_env\Scripts\activate.bat
 
 conns = snowflake.connector.connect(
@@ -96,7 +98,12 @@ def purchaser_details():
         query_id = curs.sfqid
         curs.get_results_from_sfqid(query_id)
         results = curs.fetchall()
-        return render_template('purchaser_details.html',rows=results,)
+        count_query = "SELECT COUNT(*) FROM purchaser_details"
+        curs.execute(count_query)
+        count_result = curs.fetchone()[0]  # Fetch the count result
+        session['count_result'] = count_result 
+        print("------count_query------",count_result)
+        return render_template('purchaser_details.html',rows=results,count= count_result)
 
 @app.route("/create_purchaser", methods=['GET', 'POST'])
 def create_purchaser():
@@ -135,6 +142,9 @@ def create_purchaser():
                 value = (name, email, user_rf_id, address, phone,hashed_password)
                 curs.execute(sql, value)
                 conns.commit()
+
+                session['new_purchaser'] = session.get('new_purchaser', 0) + 1
+                
                 flash('purchaser added successfully', 'success')
                 # Call the send_email function to send an email to the newly created vendor
                 sender_email = 'hinfo123456@gmail.com'
@@ -270,12 +280,13 @@ def purchaser_view(id):
     print(results)
     return render_template("purchaser_view.html", rows=results)
 
-@app.route('/vendor_dashboard', methods=['GET', 'POST'])
-def vendor_dashboard():
-    if 'user_mail' not in session:
-        return redirect(url_for('vendor_login'))
-    user_mail = session['user_mail']
-    return render_template('index.html', user_mail=user_mail)
+# @app.route('/vendor_dashboard', methods=['GET', 'POST'])
+# def vendor_dashboard():
+#     if 'user_mail' not in session:
+#         return redirect(url_for('vendor_login'))
+#     user_mail = session['user_mail']
+#     sold_items = 1
+#     return render_template('index.html', user_mail=user_mail,initialPrice = sold_items)
 
 @app.route('/vendor_login',methods=['GET','POST'])
 def vendor_login(name=None):
@@ -555,6 +566,19 @@ def edit_product(id):
         value = (productname, available_qty, price, id)
         curs.execute(task, value)
         conns.commit()
+        # --------QR_Code_scanner_image-----start------
+        # productname = request.form['product_name']
+        # folder_name = "QR_Code_Scanner_images"
+        # paytm_url = 'https://paytm.com/'
+        # if not os.path.exists(folder_name):
+        #     os.makedirs(folder_name)
+        # qr_url = pyqrcode.create(paytm_url)
+        # file_path = os.path.join(folder_name, f"{productname}.png")
+        # qr_url.png(file_path, scale=6)
+        # --------QR_Code_scanner_image-----end------
+
+
+        
         flash('Product updated successfully', 'success')
         return redirect(url_for('product_details'))
 
@@ -566,6 +590,7 @@ def edit_product(id):
         print("---------------test-----------")
         print(results)
         return render_template("edit_product.html", results=results)
+
 
 @app.route('/delete_product/<string:id>',methods = ['POST', 'GET'])
 def delete_product(id):
@@ -588,7 +613,15 @@ def add_product():
         values = (product_name,rf_reader_id, available_qty, price)
         curs.execute(task, values)
         conns.commit()
-
+        # --------QR_Code_scanner_image-----start------
+        productname = request.form['product_name']
+        folder_name = "QR_Code_Scanner_images"
+        if not os.path.exists(folder_name):
+            os.makedirs(folder_name)
+        qr_url = pyqrcode.create(price)
+        file_path = os.path.join(folder_name, f"{productname}.png")
+        qr_url.png(file_path, scale=6)
+        # --------QR_Code_scanner_image-----end------
 
         response = {'status': 'success'}
         print(product_name,available_qty,price)
@@ -599,7 +632,11 @@ def add_product():
 @app.route('/bill')
 def bill():
     cart_items = []
+    print("-----cart_item----",cart_items)
+    print("-----bill----1")
     if 'cart' in session:
+        print("-----bill----2")
+
         for product_id in session['cart']:
             product = Product.query.get(product_id)
             if product:
@@ -610,6 +647,51 @@ def bill():
 def add_cart():
     return render_template('Purchaser_add_to_cart.html')
 
+@app.route('/qr_code_fn', methods=['GET', 'POST'])
+def qr_code_fn():
+    print("-------------------qr_code_fn--------------")
+    url = 'https://mercury-t2.phonepe.com'
+    upi_id = "boomibalan-321@okicici" 
+    folder_name = "QR_Code_Scanner_images"
+
+    price = "13" 
+    product_name = "apple" 
+    print("Input_amount_from_Product_price:", price)
+    data = {
+        'amount': price,
+        'upi_id': upi_id
+    }
+    json_data = json.dumps(data)
+
+    headers = {'Content-Type': 'application/json'}
+    try:
+        response = requests.post(url, data=json_data, headers=headers)
+        if response.status_code == 200:
+            response_data = response.json()
+            transaction_status = response_data.get('status')
+            if transaction_status == 'success':
+                transaction_id = response_data.get('transaction_id')
+                print("Payment successful! Transaction ID:", transaction_id)
+            else:
+                error_message = response_data.get('error_message', 'Unknown error')
+                print("Payment failed:", error_message)
+        else:
+            print("Failed to make payment. HTTP Status Code:", response.status_code)
+    except Exception as e:
+        print('Error making request:', e)
+
+    if not os.path.exists(folder_name):
+        os.makedirs(folder_name)
+    payment_details = f"upi://{upi_id}?amount={price}&product={product_name}"
+    qr_url = pyqrcode.create(payment_details)
+    file_path = os.path.join(folder_name, f"{product_name}.png")
+    qr_url.png(file_path, scale=6)
+    print("QR code generated successfully!")
+
+    return render_template('qr_code.html')
+
+
+
 #------------------------------------------------purchase_transaction------------
 @app.route('/purchase', methods=['POST', 'GET'])
 def purchase():
@@ -618,9 +700,14 @@ def purchase():
         data = request.get_json()
         user_rfid = data.get('Rf_id')
         product_id = data.get('Rf_reader')
+        # print("---method----",methods)
+
     else:
+
         user_rfid = request.form['Rf_id']
+
         product_id = request.form['Rf_reader']
+
 
     if not user_rfid or not product_id:
         flash('Please fill in all the details.', 'error')
@@ -629,23 +716,23 @@ def purchase():
     # Check  user RFID is valid
     curs = conns.cursor()
     curs.execute("SELECT * FROM purchaser_details WHERE User_Rf_Id = %s", (user_rfid))
+    
     purchaser_details = curs.fetchone()
-
     if purchaser_details:
         # Check  the product exists and has available quantity
         curs.execute("SELECT * FROM product WHERE Rf_reader = %s", (product_id))
         product_data = curs.fetchone()
-
         if product_data:
             available_qty = product_data[3]  # column index 3  for available_qty in product table
-
             if available_qty > 0:
                 product_price = product_data[4]  # column index 4 is for price in product table
+                
                 # Convert the product price to a decimal
                 product_price_decimal = Decimal(str(product_price))
 
                  # column index 2 for account_balance in purchaser_details table
                 if purchaser_details[2] >= product_price:
+
                     # Update user balance in the purchaser_details table
                     new_balance = purchaser_details[2] - product_price_decimal
                     curs.execute("UPDATE purchaser_details SET account_balance = %s WHERE User_Rf_Id = %s", (new_balance, user_rfid))
@@ -653,16 +740,24 @@ def purchase():
                     # Update the available quantity in the product table
                     new_available_qty = available_qty - 1
                     curs.execute("UPDATE product SET available_qty = %s WHERE Rf_reader = %s", (new_available_qty, product_id))
-                    # conns.commit()
-                    # flash('Product purchased successfully!', 'success')
-                    # print(f"user_rfid: {user_rfid}")
-                    # print(f"product_price: {product_price}")
-                    # print(f"new_balance: {new_balance}")
+                    conns.commit()
+                    session['count'] = session.get('count', 0) + 1
+
+                    flash('Product purchased successfully!', 'success')
+                    print(f"user_rfid: {user_rfid}")
+                    print(f"product_price: {product_price}")
+                    print(f"new_balance: {new_balance}")
+                    
+                    from datetime import date
+                    today = date.today()
+                    product_id = product_data[0]
+                    phone_no = purchaser_details[6]
+                    product_name = product_data[2]
+                    insert_purchasing_bill = "INSERT INTO purchasing_list (DATE, ID, SHOPNAME,ITEMS,QUANTITY,TOTAL_PRICE,SHOP_ADDRESS,PHONE,PRODUCT_NAME,PRODUCT_MRP_PRICE,PRODUCT_DISCOUNT_PRICE) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                    curs.execute(insert_purchasing_bill,(today, product_id, 'Rajakani_store','1',available_qty,product_price,'theni',phone_no,product_name,product_price,'0'))
+                    conns.commit()
                     if request.headers['Content-Type'] == 'application/json':
                         return make_response(jsonify({"status": "purchased_success"}), 200)
-                    flash('Sucessfully purchased the product.')
-                    return redirect(url_for('add_cart'))
-                    
                 else:
                     flash('Insufficient balance to purchase the product.', 'error')
                     return make_response(jsonify({"status": "Insufficient_balance"}), 200)
@@ -675,7 +770,27 @@ def purchase():
         flash('Invalid user RFID.', 'error')
         return redirect(url_for('add_cart'))
 
-    return render_template('purchaser_add_to_cart.html')
+    session['product_price'] = product_price 
+    sold_amount = session.get('total_sold_amount', 0)
+    total_sold_amount = sold_amount + product_price
+    
+    session['total_sold_amount'] = total_sold_amount
+
+    return render_template('purchaser_add_to_cart.html', sold_amount=total_sold_amount)
+
+@app.route('/vendor_dashboard', methods=['GET', 'POST'])
+def vendor_dashboard():
+    if 'user_mail' not in session:
+        return redirect(url_for('vendor_login'))
+    user_mail = session['user_mail']
+    new_amount = session.get('total_sold_amount', 0)
+    count_old_purchaser = session.get('count_result', 0)
+    count_new_purchaser = session.get('new_purchaser', 0)
+
+    print("-----count_old",count_old_purchaser)
+    count = session.get('count', 0) 
+
+    return render_template('index.html',count=count, user_mail=user_mail,sold_amount = new_amount,count_old_purchaser = count_old_purchaser,count_new_purchaser = count_new_purchaser)
 
 @app.route('/all_stock_data')
 def all_stock_data():
